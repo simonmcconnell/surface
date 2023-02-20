@@ -61,10 +61,14 @@ defmodule Surface.TypeHandler.CssClass do
   end
 
   @impl true
+  def value_to_opts(_name, value) when is_binary(value) do
+    {:ok, value}
+  end
+  
   def value_to_opts(_name, value) do
     {:ok, Enum.join(value, " ")}
   end
-
+ 
   defp maybe_add_class(classes, class) do
     new_classes =
       class
