@@ -109,17 +109,11 @@ defmodule Surface do
     indentation = meta[:indentation] || 0
     column = meta[:column] || 1
 
-    component_type =
-      if Module.open?(__CALLER__.module) do
-        Module.get_attribute(__CALLER__.module, :component_type)
-      end
-
-    caller_is_surface_component = component_type != nil
+    component_type = Module.get_attribute(__CALLER__.module, :component_type)
 
     string
     |> Surface.Compiler.compile(line, __CALLER__, __CALLER__.file,
-      checks: [no_undefined_assigns: caller_is_surface_component],
-      caller_spec: %Surface.Compiler.CallerSpec{type: component_type},
+      checks: [no_undefined_assigns: component_type != nil],
       indentation: indentation,
       column: column
     )
@@ -128,6 +122,54 @@ defmodule Surface do
       file: __CALLER__.file,
       line: line
     )
+  end
+
+  @doc """
+  Embeds an `.sface` template as a function component.
+
+  ## Example
+
+      defmodule MyAppWeb.Layouts do
+        use MyAppWeb, :html
+
+        embed_sface "layouts/root.sface"
+        embed_sface "layouts/app.sface"
+      end
+
+  The code above generates two functions, `root` and `app`. You can use both
+  as regular function components or as layout templates.
+  """
+  defmacro embed_sface(relative_file) do
+    file =
+      __CALLER__.file
+      |> Path.dirname()
+      |> Path.join(relative_file)
+
+    if File.exists?(file) do
+      name = file |> Path.rootname() |> Path.basename()
+
+      body =
+        file
+        |> File.read!()
+        |> Surface.Compiler.compile(1, __CALLER__, file)
+        |> Surface.Compiler.to_live_struct()
+
+      quote do
+        @external_resource unquote(file)
+        @file unquote(file)
+        def unquote(String.to_atom(name))(var!(assigns)) do
+          _ = var!(assigns)
+          unquote(body)
+        end
+      end
+    else
+      message = """
+      could not read template "#{relative_file}": no such file or directory. \
+      Trying to read file "#{file}".
+      """
+
+      IOHelper.compile_error(message, __CALLER__.file, __CALLER__.line)
+    end
   end
 
   @doc """
@@ -223,13 +265,13 @@ defmodule Surface do
         app in [:surface, project_app] or :surface in deps_apps,
         {dir, files} = app_beams_dir_and_files(app),
         file <- files,
-        List.starts_with?(file, 'Elixir.') do
+        List.starts_with?(file, ~c"Elixir.") do
       :filename.join(dir, file)
     end
     |> Enum.chunk_every(50)
     |> Task.async_stream(fn files ->
       for file <- files,
-          {:ok, {_, [{_, chunk} | _]}} = :beam_lib.chunks(file, ['Attr']),
+          {:ok, {_, [{_, chunk} | _]}} = :beam_lib.chunks(file, [~c"Attr"]),
           chunk |> :erlang.binary_to_term() |> Keyword.get(:component_type) do
         file |> Path.basename(".beam") |> String.to_atom()
       end

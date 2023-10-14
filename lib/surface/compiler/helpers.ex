@@ -6,7 +6,8 @@ defmodule Surface.Compiler.Helpers do
 
   @builtin_common_assigns [
     :__context__,
-    :__caller_scope_id__
+    :__caller_scope_id__,
+    :streams
   ]
 
   @builtin_component_assigns [:inner_block] ++ @builtin_common_assigns
@@ -104,14 +105,15 @@ defmodule Surface.Compiler.Helpers do
     assigns
   end
 
-  def to_meta(tree_meta, %CompileMeta{caller: caller, checks: checks, style: style}) do
+  def to_meta(tree_meta, %CompileMeta{caller: caller, checks: checks, style: style, caller_spec: caller_spec}) do
     %AST.Meta{
       line: tree_meta.line,
       column: tree_meta.column,
       file: tree_meta.file,
       caller: caller,
       checks: checks,
-      style: style
+      style: style,
+      caller_spec: caller_spec
     }
   end
 
@@ -143,7 +145,7 @@ defmodule Surface.Compiler.Helpers do
     "#{plural} #{rest |> Enum.reverse() |> Enum.join(", ")} and #{last}"
   end
 
-  @blanks ' \n\r\t\v\b\f\e\d\a'
+  @blanks ~c" \n\r\t\v\b\f\e\d\a"
 
   def blank?([]), do: true
 
